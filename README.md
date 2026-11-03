@@ -1,4 +1,4 @@
-# Enterprise Knowledge Assistant
+# Permission-Aware Enterprise Knowledge Assistant
 
 An enterprise-oriented knowledge assistant with a React interface and a FastAPI
 service for permission-filtered retrieval-augmented generation (RAG). The
