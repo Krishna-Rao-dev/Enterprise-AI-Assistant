@@ -1,0 +1,157 @@
+
+[
+  {
+    "user_id": "u_alex",
+    "name": "Alex Morgan",
+    "email": "alex@northwind.example",
+    "title": "Chief Executive Officer",
+    "department": "executive",
+    "employment_type": "full_time",
+    "location": "US",
+    "manager_id": null,
+    "groups": ["all_employees", "executives"]
+  },
+  {
+    "user_id": "u_daniel",
+    "name": "Daniel Brooks",
+    "email": "daniel@northwind.example",
+    "title": "Chief Financial Officer",
+    "department": "finance",
+    "employment_type": "full_time",
+    "location": "US",
+    "manager_id": "u_alex",
+    "groups": ["all_employees", "finance", "executives"]
+  },
+  {
+    "user_id": "u_priya",
+    "name": "Priya Nair",
+    "email": "priya@northwind.example",
+    "title": "Chief People Officer",
+    "department": "hr",
+    "employment_type": "full_time",
+    "location": "India",
+    "manager_id": "u_alex",
+    "groups": ["all_employees", "hr", "hr_managers", "executives"]
+  },
+  {
+    "user_id": "u_meera",
+    "name": "Meera Kulkarni",
+    "email": "meera@northwind.example",
+    "title": "HR Manager",
+    "department": "hr",
+    "employment_type": "full_time",
+    "location": "India",
+    "manager_id": "u_priya",
+    "groups": ["all_employees", "hr", "hr_managers"]
+  },
+  {
+    "user_id": "u_rahul",
+    "name": "Rahul Deshmukh",
+    "email": "rahul@northwind.example",
+    "title": "HR Executive",
+    "department": "hr",
+    "employment_type": "full_time",
+    "location": "India",
+    "manager_id": "u_meera",
+    "groups": ["all_employees", "hr"]
+  },
+  {
+    "user_id": "u_sophia",
+    "name": "Sophia Chen",
+    "email": "sophia@northwind.example",
+    "title": "Senior Software Engineer",
+    "department": "engineering",
+    "employment_type": "full_time",
+    "location": "US",
+    "manager_id": "u_alex",
+    "groups": ["all_employees", "engineering"]
+  },
+  {
+    "user_id": "u_arjun",
+    "name": "Arjun Desai",
+    "email": "arjun@northwind.example",
+    "title": "Junior Software Engineer",
+    "department": "engineering",
+    "employment_type": "full_time",
+    "location": "India",
+    "manager_id": "u_sophia",
+    "groups": ["all_employees", "engineering"]
+  },
+  {
+    "user_id": "u_isha",
+    "name": "Isha Patel",
+    "email": "isha@northwind.example",
+    "title": "Engineering Intern",
+    "department": "engineering",
+    "employment_type": "intern",
+    "location": "India",
+    "manager_id": "u_sophia",
+    "groups": ["all_employees", "engineering"]
+  },
+  {
+    "user_id": "u_emily",
+    "name": "Emily Carter",
+    "email": "emily@northwind.example",
+    "title": "Finance Analyst",
+    "department": "finance",
+    "employment_type": "full_time",
+    "location": "US",
+    "manager_id": "u_daniel",
+    "groups": ["all_employees", "finance"]
+  },
+  {
+    "user_id": "u_james",
+    "name": "James Wilson",
+    "email": "james@northwind.example",
+    "title": "Legal Counsel",
+    "department": "legal",
+    "employment_type": "full_time",
+    "location": "US",
+    "manager_id": "u_alex",
+    "groups": ["all_employees", "legal"]
+  },
+  {
+    "user_id": "u_kavya",
+    "name": "Kavya Menon",
+    "email": "kavya@northwind.example",
+    "title": "IT Administrator",
+    "department": "it",
+    "employment_type": "full_time",
+    "location": "India",
+    "manager_id": "u_sophia",
+    "groups": ["all_employees", "it_admin"]
+  },
+  {
+    "user_id": "u_marcus",
+    "name": "Marcus Reed",
+    "email": "marcus@northwind.example",
+    "title": "Contract Software Engineer",
+    "department": "engineering",
+    "employment_type": "contractor",
+    "location": "US",
+    "manager_id": "u_sophia",
+    "groups": ["contractors"]
+  },
+  {
+    "user_id": "u_ananya",
+    "name": "Ananya Rao",
+    "email": "ananya@northwind.example",
+    "title": "Contract HR Project Specialist",
+    "department": "hr",
+    "employment_type": "contractor",
+    "location": "India",
+    "manager_id": "u_meera",
+    "groups": ["contractors"]
+  },
+  {
+    "user_id": "u_olivia",
+    "name": "Olivia Bennett",
+    "email": "olivia@northwind.example",
+    "title": "Sales Operations Specialist",
+    "department": "executive",
+    "employment_type": "full_time",
+    "location": "US",
+    "manager_id": "u_alex",
+    "groups": ["all_employees"]
+  }
+]

@@ -1,0 +1,2 @@
+Data Pipeline — Runbook | Rollback
+If a recent deployment caused the incident, use the standard deployment rollback process. Confirm compatibility between the previous code version and current schemas before reverting. Avoid rolling back database migrations or schema changes unless a reviewed rollback plan exists. After rollback, rerun health checks and validate a small controlled pipeline execu

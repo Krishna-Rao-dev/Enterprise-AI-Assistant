@@ -1,0 +1,25 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+python-frontmatter
+
+# LangChain stack
+langchain
+langchain-community
+langchain-groq
+langchain-chroma
+langchain-huggingface
+langgraph
+
+# Vector / retrieval
+chromadb
+rank_bm25
+sentence-transformers
+
+# DBs
+sqlalchemy[asyncio]
+asyncpg
+motor
+
+# Utils
+pydantic

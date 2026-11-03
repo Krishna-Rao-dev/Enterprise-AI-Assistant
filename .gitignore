@@ -1,0 +1,15 @@
+.env
+.././backend/node_modules
+.././Frontend/node_modules
+descrp.txt
+
+# Terraform working files and state may contain sensitive infrastructure data.
+**/.terraform/*
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log

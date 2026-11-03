@@ -1,0 +1,17 @@
+aws_region = "us-east-1"
+
+# The ECR repositories are created by Terraform. Push these tags before
+# setting desired_count above zero.
+frontend_image_tag = "v1"
+backend_image_tag  = "v1"
+
+# Create these Secrets Manager secrets and populate SecretString values before
+# applying the ECS task definitions. Each ARN must contain a plain string,
+# not a JSON object, because ECS injects the complete SecretString.
+groq_api_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:enterprise-assistant/groq-key-REPLACE"
+postgres_dsn_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:enterprise-assistant/postgres-dsn-REPLACE"
+mongo_uri_secret_arn    = "arn:aws:secretsmanager:us-east-1:123456789012:secret:enterprise-assistant/mongo-uri-REPLACE"
+
+# For a custom domain, request/validate an ACM certificate in us-east-1 and set both:
+# cloudfront_aliases                  = ["assistant.example.com"]
+# cloudfront_acm_certificate_arn      = "arn:aws:acm:us-east-1:123456789012:certificate/REPLACE"

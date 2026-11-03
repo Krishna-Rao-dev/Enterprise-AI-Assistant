@@ -1,0 +1,196 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0A0A0F;
+  --color-surface: #101017;
+  --color-elevated: #16161F;
+  --color-hover: #1C1C27;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --color-text: #ECECF3;
+  --color-muted: #8E8EA0;
+  --color-faint: #5C5C6E;
+  --color-primary: #8B5CF6;
+  --color-secondary: #3B82F6;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-danger: #F87171;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Custom subtle scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  /* WCAG focus-visible ring */
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.55);
+  }
+}
+
+/* Restrained primary gradient reserved ONLY for Send, Approve, and empty state glow */
+.btn-primary-gradient {
+  background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+  color: #FFFFFF;
+  transition: all 180ms ease-out;
+}
+.btn-primary-gradient:hover:not(:disabled) {
+  opacity: 0.94;
+  filter: brightness(1.06);
+}
+.btn-primary-gradient:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn-primary-gradient:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Ambient glow for empty state composer */
+.ambient-composer-glow {
+  position: absolute;
+  inset: -12px;
+  background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.16) 0%, rgba(59, 130, 246, 0.08) 45%, transparent 75%);
+  filter: blur(28px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle blinking caret for streaming tokens */
+@keyframes soft-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-caret {
+  display: inline-block;
+  width: 6px;
+  height: 15px;
+  margin-left: 3px;
+  vertical-align: middle;
+  background-color: var(--color-primary);
+  border-radius: 1px;
+  animation: soft-blink 0.9s infinite ease-in-out;
+}
+
+/* Clean markdown content styling */
+.prose-assistant {
+  color: var(--color-text);
+  line-height: 1.65;
+  font-size: 0.9375rem;
+}
+.prose-assistant h1,
+.prose-assistant h2,
+.prose-assistant h3 {
+  font-family: 'Source Serif 4', Georgia, serif;
+  color: #FFFFFF;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.prose-assistant h1 { font-size: 1.35rem; }
+.prose-assistant h2 { font-size: 1.18rem; }
+.prose-assistant h3 { font-size: 1.05rem; }
+
+.prose-assistant p {
+  margin-bottom: 0.75rem;
+}
+.prose-assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-assistant ul, 
+.prose-assistant ol {
+  margin-top: 0.35rem;
+  margin-bottom: 0.75rem;
+  padding-left: 1.35rem;
+}
+.prose-assistant ul { list-style-type: disc; }
+.prose-assistant ol { list-style-type: decimal; }
+.prose-assistant li {
+  margin-bottom: 0.25rem;
+}
+
+.prose-assistant table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0.85rem 0;
+  font-size: 0.84rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+.prose-assistant th {
+  background: var(--color-elevated);
+  color: var(--color-text);
+  font-weight: 600;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.prose-assistant td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: #D6D6E2;
+}
+.prose-assistant tr:last-child td {
+  border-bottom: none;
+}
+.prose-assistant tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.prose-assistant code:not(pre code) {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8125rem;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  padding: 2px 5px;
+  border-radius: 6px;
+  color: #E2E8F0;
+}
+
+.prose-assistant pre {
+  margin: 0.75rem 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
