@@ -61,6 +61,10 @@ const loadInitialTasks = () => {
 };
 
 const loadInitialUser = () => {
+  if (!apiClient.isMock && apiClient.apiUserId) {
+    const configuredUser = MOCK_USERS.find((u) => u.id === apiClient.apiUserId);
+    if (configuredUser) return configuredUser;
+  }
   try {
     const id = localStorage.getItem(STORAGE_USER_KEY);
     if (id) {
@@ -206,6 +210,13 @@ export const useAppStore = create((set, get) => ({
   dismissToast: () => set({ toast: null }),
 
   setCurrentUser: (userId) => {
+    if (!apiClient.isMock) {
+      get().showToast(
+        `Backend user is fixed to ${apiClient.apiUserId || 'the configured API identity'}.`,
+        'info'
+      );
+      return;
+    }
     const user = MOCK_USERS.find(u => u.id === userId);
     if (user) {
       try {

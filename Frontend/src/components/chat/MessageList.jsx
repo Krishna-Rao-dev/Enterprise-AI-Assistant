@@ -22,9 +22,36 @@ export function MessageList() {
     if (apiClient.isMock || !currentThread || currentThread.messagesLoaded !== false) return undefined;
 
     let cancelled = false;
-    apiClient.getThreadMessages(currentThread.id)
-      .then((messages) => {
+    Promise.all([
+      apiClient.getThreadMessages(currentThread.id),
+      apiClient.getPendingActions(currentThread.id),
+    ])
+      .then(([messages, pendingActions]) => {
         if (cancelled) return;
+        if (pendingActions.length > 0) {
+          const pending = pendingActions[0];
+          let assistantIndex = -1;
+          for (let index = messages.length - 1; index >= 0; index -= 1) {
+            if (messages[index].role === 'assistant') {
+              assistantIndex = index;
+              break;
+            }
+          }
+          if (assistantIndex >= 0) {
+            messages[assistantIndex] = {
+              ...messages[assistantIndex],
+              approval: {
+                approval_id: pending.approval_id,
+                action: pending.action,
+                args: pending.args || {},
+                risk: 'write',
+                status: pending.status,
+                expiresAt: Date.parse(pending.expires_at),
+                createdAt: Date.now(),
+              },
+            };
+          }
+        }
         useAppStore.setState((state) => ({
           threads: state.threads.map((thread) =>
             thread.id === currentThread.id

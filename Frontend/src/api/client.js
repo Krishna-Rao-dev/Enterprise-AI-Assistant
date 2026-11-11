@@ -111,16 +111,36 @@ async function* readSse(response, onEvent) {
         throw new Error('The backend returned invalid source metadata.');
       }
       event = { type: 'sources', items: sources };
+    } else if (eventName === 'interrupt' || eventName === 'result') {
+      let value;
+      try {
+        value = JSON.parse(payload);
+      } catch {
+        throw new Error(`The backend returned invalid ${eventName} data.`);
+      }
+      event = { type: eventName, ...value };
     } else if (eventName === 'done') {
       const events = [];
       if (activeStepId) {
         events.push({ type: 'step', id: activeStepId, status: 'done' });
         activeStepId = null;
       }
-      events.push({ type: 'done', thread_id: payload });
+      let threadId = payload;
+      try {
+        threadId = JSON.parse(payload).thread_id || payload;
+      } catch {
+        // Older backend versions emitted the thread ID as plain text.
+      }
+      events.push({ type: 'done', thread_id: threadId });
       return events;
     } else if (eventName === 'error') {
-      const error = new Error(payload || 'The backend failed while processing the request.');
+      let message = payload;
+      try {
+        message = JSON.parse(payload).message || payload;
+      } catch {
+        // Keep plain-text errors from older backend versions.
+      }
+      const error = new Error(message || 'The backend failed while processing the request.');
       error.code = 'BACKEND_STREAM_ERROR';
       throw error;
     } else {
@@ -195,9 +215,31 @@ export const apiClient = {
     yield* readSse(response, onEvent);
   },
 
-  async *chatResume({ decision, args, action, speedMultiplier = 1, onEvent = null }) {
+  async *chatResume({
+    threadId,
+    approvalId,
+    decision,
+    args,
+    action,
+    speedMultiplier = 1,
+    onEvent = null,
+  }) {
     if (!IS_MOCK) {
-      throw new Error('The backend does not expose an approval or chat-resume endpoint.');
+      const response = await readResponse(await fetch(
+        apiUrl(`/api/chat/${encodeURIComponent(threadId)}/resume`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: getApiUserId(),
+            approval_id: approvalId,
+            decision,
+            args: args || null,
+          }),
+        }
+      ));
+      yield* readSse(response, onEvent);
+      return;
     }
     for await (const event of resumeSimulationStream({
       decision,
@@ -226,10 +268,19 @@ export const apiClient = {
 
   async getThreadMessages(threadId) {
     const response = await readResponse(await fetch(
-      apiUrl(`/api/chat/${encodeURIComponent(threadId)}/messages`)
+      apiUrl(`/api/chat/${encodeURIComponent(threadId)}/messages?user_id=${encodeURIComponent(getApiUserId())}`)
     ));
     const data = await response.json();
     return messagesToFrontend(threadId, data.messages || []);
+  },
+
+  async getPendingActions(threadId) {
+    if (IS_MOCK) return [];
+    const response = await readResponse(await fetch(
+      apiUrl(`/api/chat/${encodeURIComponent(threadId)}/pending?user_id=${encodeURIComponent(getApiUserId())}`)
+    ));
+    const data = await response.json();
+    return data.approvals || [];
   },
 
   async submitFeedback({

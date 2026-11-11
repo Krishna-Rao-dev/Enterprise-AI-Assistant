@@ -34,6 +34,10 @@ locals {
     var.postgres_dsn_secret_arn,
     var.mongo_uri_secret_arn,
   ]
+  runtime_secret_arns_with_jira = var.jira_credentials_secret_arn == "" ? local.runtime_secret_arns : concat(
+    local.runtime_secret_arns,
+    [var.jira_credentials_secret_arn],
+  )
 }
 
 resource "aws_ecr_repository" "frontend" {
@@ -320,7 +324,7 @@ resource "aws_iam_role_policy" "read_runtime_secrets" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue"]
-      Resource = local.runtime_secret_arns
+      Resource = local.runtime_secret_arns_with_jira
     }]
   })
 }
@@ -380,15 +384,22 @@ resource "aws_ecs_task_definition" "backend" {
     environment = [
       { name = "MONGO_DB", value = var.mongo_db },
       { name = "LLM_MODEL", value = var.llm_model },
+      { name = "JIRA_DEFAULT_PROJECT", value = var.jira_default_project },
+      { name = "ALLOWED_ORIGINS", value = "" },
       { name = "CHROMA_DIR", value = "chroma_db" },
       { name = "POLICIES_GLOB", value = "docs/policies/*.md" },
       { name = "REPO_DOCS_GLOB", value = "docs/repos/*.md" },
     ]
-    secrets = [
-      { name = "GROQ_API_KEY", valueFrom = var.groq_api_key_secret_arn },
-      { name = "PG_DSN", valueFrom = var.postgres_dsn_secret_arn },
-      { name = "MONGO_URI", valueFrom = var.mongo_uri_secret_arn },
-    ]
+    secrets = concat(
+      [
+        { name = "GROQ_API_KEY", valueFrom = var.groq_api_key_secret_arn },
+        { name = "PG_DSN", valueFrom = var.postgres_dsn_secret_arn },
+        { name = "MONGO_URI", valueFrom = var.mongo_uri_secret_arn },
+      ],
+      var.jira_credentials_secret_arn == "" ? [] : [
+        { name = "JIRA_CREDENTIALS_JSON", valueFrom = var.jira_credentials_secret_arn },
+      ],
+    )
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -448,12 +459,6 @@ resource "aws_ecs_service" "backend" {
     aws_iam_role_policy.read_runtime_secrets,
     aws_lb_listener_rule.backend,
   ]
-}
-
-resource "aws_secretsmanager_secret" "jira_credentials" {
-  name                    = "${var.name}/jira-credentials"
-  description             = "Reserved for future Jira MCP integration; the current backend does not consume this secret."
-  recovery_window_in_days = 7
 }
 
 resource "aws_wafv2_web_acl" "edge" {
@@ -565,12 +570,12 @@ resource "aws_cloudfront_distribution" "app" {
   }
 
   default_cache_behavior {
-    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
-    cached_methods             = ["GET", "HEAD"]
-    target_origin_id           = "application-alb"
-    viewer_protocol_policy     = "redirect-to-https"
-    compress                   = true
-    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "application-alb"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
   }
 
   ordered_cache_behavior {

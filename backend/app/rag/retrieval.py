@@ -24,8 +24,6 @@ def init_retrieval():
     emb = HuggingFaceEmbeddings(model_name=EMB_MODEL)
     _vs = Chroma(persist_directory=CHROMA_DIR, embedding_function=emb)
     # Load all docs into memory for BM25 (small corpus, fine for ~10k chunks)
-    _chunks = _vs.get()["documents"]  # raw strings
-    # Rebuild as Document objects with metadata
     raw = _vs.get(include=["documents", "metadatas"])
     _chunks = [
         Document(page_content=doc, metadata=meta)
@@ -33,24 +31,58 @@ def init_retrieval():
     ]
     _reranker = CrossEncoder(RERANK_MODEL)
     print(f"[retrieval] loaded {len(_chunks)} chunks from ChromaDB")
+    repo_access: dict[str, set[str]] = {}
+    for chunk in _chunks:
+        repo = chunk.metadata.get("repo")
+        if repo:
+            repo_access.setdefault(repo, set()).update(
+                filter(None, chunk.metadata.get("allowed_groups", "").split(","))
+            )
+    return repo_access
 
 
 # ── ACL helpers ──────────────────────────────────────────────────────────────
 
-def _acl_filter(groups: set) -> dict:
-    conds = [{f"grp_{g}": True} for g in sorted(groups)]
-    return conds[0] if len(conds) == 1 else {"$or": conds}
+def _group_filter(groups: set[str]) -> dict:
+    clauses = [{f"grp_{group}": True} for group in sorted(groups)]
+    return clauses[0] if len(clauses) == 1 else {"$or": clauses}
 
 
-def _chunk_allowed(chunk: Document, groups: set, repo: Optional[str]) -> bool:
+def _acl_filter(
+    groups: set[str],
+    repo_access: dict[str, set[str]],
+    repo: Optional[str],
+) -> dict:
+    filters = [
+        {"$and": [{"source_type": "policy"}, _group_filter(groups)]}
+    ]
+    for repo_name, repo_groups in sorted(repo_access.items()):
+        if repo and repo_name != repo:
+            continue
+        allowed_groups = groups & repo_groups
+        if allowed_groups:
+            filters.append({
+                "$and": [{"repo": repo_name}, _group_filter(allowed_groups)]
+            })
+    return filters[0] if len(filters) == 1 else {"$or": filters}
+
+
+def _chunk_allowed(
+    chunk: Document,
+    groups: set[str],
+    repo: Optional[str],
+    repo_access: dict[str, set[str]],
+) -> bool:
     meta = chunk.metadata
     allowed_groups = set(meta.get("allowed_groups", "").split(","))
     if not groups & allowed_groups:
         return False
-    # repo filter: if chunk has a repo tag, user must have access
     chunk_repo = meta.get("repo")
-    if chunk_repo and repo and chunk_repo != repo:
-        return False
+    if chunk_repo:
+        if repo and chunk_repo != repo:
+            return False
+        if not groups & repo_access.get(chunk_repo, set()):
+            return False
     return True
 
 
@@ -58,9 +90,10 @@ def _chunk_allowed(chunk: Document, groups: set, repo: Optional[str]) -> bool:
 
 def hybrid_search(
     query: str,
-    groups: set,
+    groups: set[str],
     k: int = 10,
     repo: Optional[str] = None,
+    repo_access: Optional[dict[str, set[str]]] = None,
 ) -> List[Document]:
     """
     ACL-filtered hybrid retrieval.
@@ -69,22 +102,18 @@ def hybrid_search(
     """
     if not groups:
         return []   # fail closed
+    repo_access = repo_access or {}
 
     # ── vector side (Chroma filter) ──
-    chroma_filter = _acl_filter(groups)
-    if repo:
-        # narrow to this repo only (OR no-repo policy docs)
-        chroma_filter = {
-            "$or": [
-                {**chroma_filter, "repo": repo},
-                {**chroma_filter, "source_type": "policy"},
-            ]
-        }
+    chroma_filter = _acl_filter(groups, repo_access, repo)
     vec = _vs.as_retriever(search_kwargs={"k": k, "filter": chroma_filter})
     vec_docs = vec.invoke(query)
 
     # ── BM25 side (in-memory filter) ──
-    allowed = [c for c in _chunks if _chunk_allowed(c, groups, repo)]
+    allowed = [
+        c for c in _chunks
+        if _chunk_allowed(c, groups, repo, repo_access)
+    ]
     bm25_docs = BM25Retriever.from_documents(allowed, k=k).invoke(query) if allowed else []
 
     # ── RRF merge ──

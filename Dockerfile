@@ -7,20 +7,18 @@ RUN npm ci
 
 COPY Frontend/index.html Frontend/vite.config.js Frontend/tailwind.config.js Frontend/postcss.config.js ./
 COPY Frontend/src ./src
+ARG VITE_USE_MOCK=false
+ARG VITE_API_USER_ID=u_isha
+ARG VITE_API_BASE_URL=
+ENV VITE_USE_MOCK=${VITE_USE_MOCK} \
+    VITE_API_USER_ID=${VITE_API_USER_ID} \
+    VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
 FROM nginx:alpine AS frontend
 
 COPY --from=frontend-build /app/frontend/dist /usr/share/nginx/html
-RUN printf 'server {\n\
-    listen 8080;\n\
-    server_name _;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-    location / {\n\
-        try_files $uri $uri/ /index.html;\n\
-    }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+COPY Frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
@@ -52,7 +50,7 @@ USER app
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=3 \
     CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3)"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

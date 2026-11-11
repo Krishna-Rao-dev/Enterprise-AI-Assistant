@@ -10,6 +10,7 @@ langchain-groq
 langchain-chroma
 langchain-huggingface
 langgraph
+langgraph-checkpoint-postgres>=2.0,<3
 
 # Vector / retrieval
 chromadb
@@ -20,6 +21,10 @@ sentence-transformers
 sqlalchemy[asyncio]
 asyncpg
 motor
+psycopg[binary,pool]>=3.2,<4
+mcp>=1.12,<2
 
 # Utils
 pydantic
+httpx
+pymongo>=4.5,<5

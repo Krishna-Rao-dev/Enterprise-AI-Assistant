@@ -32,6 +32,18 @@ export const SLASH_COMMANDS = [
     icon: CheckCircle2,
   },
   {
+    cmd: '/leave-balance',
+    title: 'Check leave balance',
+    desc: 'Read your current available leave balance',
+    icon: CheckCircle2,
+  },
+  {
+    cmd: '/request-leave',
+    title: 'Request leave',
+    desc: 'Draft a leave request for your approval',
+    icon: FileText,
+  },
+  {
     cmd: '/summarize',
     title: 'Summarize context',
     desc: 'Synthesize thread discussion into concise takeaways',

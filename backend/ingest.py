@@ -28,7 +28,13 @@ to the repo. Finer-grained ownership can be added via the `repo_access`
 PostgreSQL table (group → repo mapping), enforced in retrieval.py.
 """
 
-import glob, json, re, shutil, sys
+import glob
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
 from pathlib import Path
 
 import frontmatter
@@ -37,20 +43,12 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
+from app.config import (
+    CHROMA_DIR, EMB_MODEL, POLICIES_GLOB, REPO_DOCS_GLOB,
+    REQUIRED_POLICY_FIELDS, REQUIRED_REPO_FIELDS, VALID_GROUPS,
+)
+
 # ── config ───────────────────────────────────────────────────────────────────
-
-POLICIES_GLOB = ".././docs/policies/*.md"
-REPO_DOCS_GLOB = ".././docs/repos/*.md"
-CHROMA_DIR = "chroma_db"
-EMB_MODEL = "BAAI/bge-small-en-v1.5"
-
-VALID_GROUPS = {
-    "all_employees", "engineering", "hr", "hr_managers",
-    "finance", "legal", "it_admin", "executives", "contractors"
-}
-
-REQUIRED_POLICY = ["doc_id", "title", "status", "version", "last_updated", "allowed_groups"]
-REQUIRED_REPO   = ["doc_id", "title", "repo", "allowed_groups"]
 
 # ── splitters ────────────────────────────────────────────────────────────────
 
@@ -64,18 +62,25 @@ TABLE_RE   = re.compile(r"(?:^[ \t]*\|.*\|[ \t]*\n?)+", re.MULTILINE)
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def validate_policy(m, path):
-    missing = [k for k in REQUIRED_POLICY if k not in m]
-    assert not missing, f"{path}: missing {missing}"
-    assert m["allowed_groups"], f"{path}: empty allowed_groups"
+    missing = [k for k in REQUIRED_POLICY_FIELDS if k not in m]
+    if missing:
+        raise ValueError(f"{path}: missing required fields {missing}")
+    if not m["allowed_groups"]:
+        raise ValueError(f"{path}: allowed_groups must not be empty")
     bad = set(m["allowed_groups"]) - VALID_GROUPS
-    assert not bad, f"{path}: unknown groups {bad}"
+    if bad:
+        raise ValueError(f"{path}: unknown groups {sorted(bad)}")
 
 
 def validate_repo(m, path):
-    missing = [k for k in REQUIRED_REPO if k not in m]
-    assert not missing, f"{path}: missing {missing}"
+    missing = [k for k in REQUIRED_REPO_FIELDS if k not in m]
+    if missing:
+        raise ValueError(f"{path}: missing required fields {missing}")
+    if not m["allowed_groups"]:
+        raise ValueError(f"{path}: allowed_groups must not be empty")
     bad = set(m["allowed_groups"]) - VALID_GROUPS
-    assert not bad, f"{path}: unknown groups {bad}"
+    if bad:
+        raise ValueError(f"{path}: unknown groups {sorted(bad)}")
 
 
 def split_tables(text):
@@ -169,14 +174,43 @@ def main():
 
     # ── sanity: ACL ──
     bad = [c for c in all_chunks if not c.metadata["allowed_groups"]]
-    assert not bad, f"{len(bad)} chunks have no allowed_groups!"
+    if bad:
+        raise ValueError(f"{len(bad)} chunks have no allowed_groups")
 
     # ── build ChromaDB ──
     print("\nBuilding ChromaDB (this embeds everything)...")
-    shutil.rmtree(CHROMA_DIR, ignore_errors=True)
+    target = Path(CHROMA_DIR)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=f"{target.name}.staging-", dir=target.parent))
+    backup = target.with_name(f"{target.name}.backup")
     emb = HuggingFaceEmbeddings(model_name=EMB_MODEL)
-    vs  = Chroma.from_documents(all_chunks, emb, persist_directory=CHROMA_DIR)
-    print(f"ChromaDB built: {vs._collection.count()} vectors in '{CHROMA_DIR}/'")
+    try:
+        vs = Chroma.from_documents(
+            all_chunks, emb, persist_directory=str(temporary)
+        )
+        count = vs._collection.count()
+        if count != len(all_chunks):
+            raise RuntimeError(
+                f"ChromaDB contains {count} vectors for {len(all_chunks)} chunks"
+            )
+        del vs
+        if backup.exists():
+            shutil.rmtree(backup)
+        if target.exists():
+            os.replace(target, backup)
+        try:
+            os.replace(temporary, target)
+        except OSError:
+            if backup.exists() and not target.exists():
+                os.replace(backup, target)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup)
+    except Exception:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        raise
+    print(f"ChromaDB built: {count} vectors in '{target}/'")
 
     # ── summary ──
     from collections import Counter

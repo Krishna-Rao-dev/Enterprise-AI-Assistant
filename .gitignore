@@ -1,6 +1,12 @@
 .env
-.././backend/node_modules
-.././Frontend/node_modules
+**/.env
+**/node_modules/
+**/.venv/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
 descrp.txt
 
 # Terraform working files and state may contain sensitive infrastructure data.

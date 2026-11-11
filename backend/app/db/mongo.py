@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 
 from app.config import MONGO_URI, MONGO_DB
 
@@ -27,31 +28,45 @@ def get_db():
     return get_client()[MONGO_DB]
 
 
+async def ensure_indexes():
+    db = get_db()
+    await db.chat_history.create_index("thread_id", unique=True)
+    await db.chat_history.create_index([("user_id", 1), ("created_at", -1)])
+    await db.feedback.create_index([("thread_id", 1), ("user_id", 1)])
+
+
 # ── chat history ─────────────────────────────────────────────────────────────
 
 async def append_message(thread_id: str, role: str, content: str, user_id: str):
     """Append one message to the thread's history."""
     db = get_db()
-    await db.chat_history.update_one(
-        {"thread_id": thread_id},
-        {
-            "$setOnInsert": {"user_id": user_id, "created_at": datetime.utcnow()},
-            "$push": {
-                "messages": {
-                    "role": role,           # "human" | "assistant"
-                    "content": content,
-                    "ts": datetime.utcnow()
+    try:
+        await db.chat_history.update_one(
+            {"thread_id": thread_id, "user_id": user_id},
+            {
+                "$setOnInsert": {"created_at": datetime.utcnow()},
+                "$push": {
+                    "messages": {
+                        "role": role,
+                        "content": content,
+                        "ts": datetime.utcnow()
+                    }
                 }
-            }
-        },
-        upsert=True
-    )
+            },
+            upsert=True
+        )
+    except DuplicateKeyError as exc:
+        raise PermissionError("Conversation does not belong to this user") from exc
 
 
-async def get_history(thread_id: str, limit: int = 10) -> List[dict]:
+async def get_history(
+    thread_id: str, user_id: str, limit: int = 10
+) -> List[dict]:
     """Return last `limit` messages for a thread."""
     db = get_db()
-    doc = await db.chat_history.find_one({"thread_id": thread_id})
+    doc = await db.chat_history.find_one(
+        {"thread_id": thread_id, "user_id": user_id}
+    )
     if not doc:
         return []
     return doc.get("messages", [])[-limit:]

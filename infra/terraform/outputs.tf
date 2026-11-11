@@ -9,8 +9,8 @@ output "cloudfront_distribution_id" {
 }
 
 output "jira_credentials_secret_arn" {
-  description = "Empty Secrets Manager secret reserved for future Jira MCP integration. No secret value is created."
-  value       = aws_secretsmanager_secret.jira_credentials.arn
+  description = "Optional existing Jira credential secret ARN supplied to the backend."
+  value       = var.jira_credentials_secret_arn
 }
 
 output "ecs_cluster_name" {

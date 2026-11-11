@@ -76,6 +76,18 @@ variable "mongo_uri_secret_arn" {
   type        = string
 }
 
+variable "jira_credentials_secret_arn" {
+  description = "Optional Secrets Manager ARN containing a JSON Jira credential object with base_url, email, api_token, and default_project."
+  type        = string
+  default     = ""
+}
+
+variable "jira_default_project" {
+  description = "Default Jira project key used when the router cannot extract one."
+  type        = string
+  default     = "PAY"
+}
+
 variable "mongo_db" {
   description = "MongoDB database name."
   type        = string

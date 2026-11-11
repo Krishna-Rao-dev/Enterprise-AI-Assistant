@@ -180,11 +180,13 @@ export function useChatStream() {
               if (event.type === 'interrupt') {
                 const approval = {
                   action: event.action,
+                  approval_id: event.approval_id,
                   risk: event.risk || 'write',
                   args: event.args || {},
                   locked: event.locked || {},
                   based_on: event.based_on || [],
                   status: 'pending', // 'pending' | 'submitting' | 'approved' | 'rejected' | 'expired' | 'failed'
+                  expiresAt: event.expires_at ? new Date(event.expires_at).getTime() : null,
                   createdAt: Date.now(),
                 };
 
@@ -325,9 +327,15 @@ export function useChatStream() {
     decision, // 'approve' | 'reject'
     args,
     action,
+    approvalId,
   }) => {
     const store = useAppStore.getState();
     const { speedMultiplier, addEventLog, showToast, saveThreadToStorage, addScheduledTask, refreshTickets } = store;
+    const pendingApprovalId = approvalId || store.threads
+      .find((thread) => thread.id === threadId)
+      ?.messages.find((message) => message.id === messageId)
+      ?.approval?.approval_id;
+    const isMock = apiClient.isMock;
 
     // Immediately update status to 'submitting' if approving or 'rejected' if rejecting
     useAppStore.setState((state) => {
@@ -342,7 +350,7 @@ export function useChatStream() {
               approval: {
                 ...m.approval,
                 args: args || m.approval.args,
-                status: decision === 'approve' ? 'submitting' : 'rejected',
+                status: decision === 'approve' || !isMock ? 'submitting' : 'rejected',
               },
             };
           }),
@@ -351,7 +359,7 @@ export function useChatStream() {
       return { threads: updatedThreads };
     });
 
-    if (decision === 'reject') {
+    if (decision === 'reject' && isMock) {
       showToast('Action rejected', 'info');
       return;
     }
@@ -359,6 +367,7 @@ export function useChatStream() {
     try {
       const resumeStream = apiClient.chatResume({
         threadId,
+        approvalId: pendingApprovalId,
         decision,
         args,
         action,
@@ -367,6 +376,21 @@ export function useChatStream() {
       });
 
       for await (const event of resumeStream) {
+        if (event.type === 'token') {
+          useAppStore.setState((state) => ({
+            threads: state.threads.map((thread) => thread.id !== threadId
+              ? thread
+              : {
+                  ...thread,
+                  messages: thread.messages.map((message) => (
+                    message.id !== messageId
+                      ? message
+                      : { ...message, content: `${message.content || ''}${event.text}` }
+                  )),
+                }),
+          }));
+        }
+
         if (event.type === 'executing') {
           useAppStore.setState((state) => {
             const updatedThreads = state.threads.map(t => {
@@ -391,7 +415,26 @@ export function useChatStream() {
         }
 
         if (event.type === 'result') {
-          refreshTickets();
+          if (isMock) refreshTickets();
+          if (event.status === 'rejected') {
+            useAppStore.setState((state) => ({
+              threads: state.threads.map((thread) => thread.id !== threadId
+                ? thread
+                : {
+                    ...thread,
+                    messages: thread.messages.map((message) => (
+                      message.id !== messageId || !message.approval
+                        ? message
+                        : {
+                            ...message,
+                            approval: { ...message.approval, status: 'rejected' },
+                          }
+                    )),
+                  }),
+            }));
+            showToast('Action rejected', 'info');
+            continue;
+          }
           if (event.status === 'success') {
             useAppStore.setState((state) => {
               const updatedThreads = state.threads.map(t => {
@@ -407,6 +450,7 @@ export function useChatStream() {
                         status: 'success',
                         receipt: {
                           ticket_key: event.ticket_key,
+                          request_id: event.request_id,
                           meeting_title: event.meeting_title,
                           scheduled_time: event.scheduled_time,
                           url: event.url,
@@ -425,7 +469,9 @@ export function useChatStream() {
               };
             });
 
-            if (event.meeting_title) {
+            if (event.request_id) {
+              showToast(`Leave request submitted (${event.request_id})`, 'success');
+            } else if (event.meeting_title) {
               addScheduledTask({
                 id: `st-${Date.now()}`,
                 name: event.meeting_title,

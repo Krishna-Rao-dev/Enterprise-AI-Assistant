@@ -1,48 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useChatStream } from '../../hooks/useChatStream';
+import { apiClient } from '../../api/client';
 import {
   Shield,
   CheckCircle2,
   AlertCircle,
   ExternalLink,
-  Lock,
   Loader2,
-  FileText,
   RotateCcw,
   Check,
   Eye,
   Edit3
 } from 'lucide-react';
-import * as Tooltip from '@radix-ui/react-tooltip';
 
 export function ApprovalCard({ approval, messageId, threadId }) {
   const { currentUser, showToast } = useAppStore();
   const { handleApprovalDecision } = useChatStream();
 
-  const [project, setProject] = useState(approval.args.project || 'PAY');
+  const [project, setProject] = useState(
+    approval.args.project_key || approval.args.project || ''
+  );
   const [summary, setSummary] = useState(approval.args.summary || '');
   const [description, setDescription] = useState(approval.args.description || '');
   const [priority, setPriority] = useState(approval.args.priority || 'Medium');
+  const [startDate, setStartDate] = useState(approval.args.start_date || '');
+  const [endDate, setEndDate] = useState(approval.args.end_date || '');
+  const [reason, setReason] = useState(approval.args.reason || '');
   const [showPreview, setShowPreview] = useState(false);
   const [validationError, setValidationError] = useState('');
   const [isExpired, setIsExpired] = useState(approval.status === 'expired');
+  const isLeaveRequest = approval.action === 'hr_submit_leave_request';
+  const actionTitle = isLeaveRequest ? 'Submit HR leave request' : 'Create Jira ticket';
 
-  const status = isExpired ? 'expired' : approval.status; // pending | submitting | executing | success | rejected | expired | failed
+  const status = isExpired && ['pending', 'expired'].includes(approval.status)
+    ? 'expired'
+    : approval.status; // pending | submitting | executing | success | rejected | expired | failed
 
-  // 90 second expiration timer
   useEffect(() => {
     if (status !== 'pending') return;
 
-    const elapsed = Date.now() - (approval.createdAt || Date.now());
-    const remaining = Math.max(0, 90000 - elapsed);
+    const expiresAt = approval.expiresAt || (approval.createdAt || Date.now()) + 90000;
+    const remaining = Math.max(0, expiresAt - Date.now());
 
     const timer = setTimeout(() => {
       setIsExpired(true);
     }, remaining);
 
     return () => clearTimeout(timer);
-  }, [status, approval.createdAt]);
+  }, [status, approval.createdAt, approval.expiresAt]);
 
   // Keyboard shortcut: Cmd/Ctrl+Enter to approve, Esc to reject
   useEffect(() => {
@@ -63,7 +69,11 @@ export function ApprovalCard({ approval, messageId, threadId }) {
   }, [status, summary, description, priority, project]);
 
   const handleApprove = () => {
-    if (!summary.trim()) {
+    if (isLeaveRequest && (!startDate || !endDate || !reason.trim())) {
+      setValidationError('Start date, end date, and reason are required');
+      return;
+    }
+    if (!isLeaveRequest && !summary.trim()) {
       setValidationError('Summary is required');
       return;
     }
@@ -72,16 +82,20 @@ export function ApprovalCard({ approval, messageId, threadId }) {
     handleApprovalDecision({
       threadId,
       messageId,
+      approvalId: approval.approval_id,
       decision: 'approve',
       action: approval.action || 'create_ticket',
-      args: {
-        project,
-        summary: summary.trim(),
-        description: description.trim(),
-        priority,
-        reporter: `${currentUser.name} (${currentUser.email})`,
-        based_on: approval.based_on,
-      },
+      args: isLeaveRequest
+        ? { start_date: startDate, end_date: endDate, reason: reason.trim() }
+        : {
+            project,
+            project_key: project,
+            summary: summary.trim(),
+            description: description.trim(),
+            priority,
+            reporter: `${currentUser.name} (${currentUser.email})`,
+            based_on: approval.based_on,
+          },
     });
   };
 
@@ -89,6 +103,7 @@ export function ApprovalCard({ approval, messageId, threadId }) {
     handleApprovalDecision({
       threadId,
       messageId,
+      approvalId: approval.approval_id,
       decision: 'reject',
       action: approval.action || 'create_ticket',
     });
@@ -132,12 +147,18 @@ export function ApprovalCard({ approval, messageId, threadId }) {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-text">
-                Action Completed: {receipt.ticket_key ? `Created ${receipt.ticket_key}` : 'Scheduled'}
+                Action Completed: {receipt.ticket_key
+                  ? `Created ${receipt.ticket_key}`
+                  : receipt.request_id
+                    ? 'Leave request submitted'
+                    : 'Scheduled'}
               </span>
               <span className="text-[10px] font-mono text-faint">{receipt.time}</span>
             </div>
             <p className="text-[11px] text-muted mt-0.5 truncate max-w-md">
-              {summary || approval.args.summary}
+              {isLeaveRequest
+                ? `${approval.receipt?.start_date || approval.args.start_date || startDate} – ${approval.receipt?.end_date || approval.args.end_date || endDate}`
+                : summary || approval.args.summary}
             </p>
           </div>
         </div>
@@ -163,15 +184,21 @@ export function ApprovalCard({ approval, messageId, threadId }) {
       <div className="my-3 p-3.5 rounded-card bg-surface/60 border border-border flex items-center justify-between text-xs text-muted animate-in fade-in-50">
         <div className="flex items-center gap-2.5">
           <AlertCircle className="w-4 h-4 text-faint" />
-          <span>You rejected this write action. No tickets were created.</span>
+          <span>
+            {isLeaveRequest
+              ? 'You rejected this write action. No leave request was submitted.'
+              : 'You rejected this write action. No Jira ticket was created.'}
+          </span>
         </div>
-        <button
-          onClick={handleRedraft}
-          className="text-primary hover:underline font-medium text-xs flex items-center gap-1"
-        >
-          <RotateCcw className="w-3 h-3" />
-          <span>Redraft</span>
-        </button>
+        {apiClient.isMock && (
+          <button
+            onClick={handleRedraft}
+            className="text-primary hover:underline font-medium text-xs flex items-center gap-1"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Redraft</span>
+          </button>
+        )}
       </div>
     );
   }
@@ -182,14 +209,29 @@ export function ApprovalCard({ approval, messageId, threadId }) {
       <div className="my-3 p-3.5 rounded-card bg-surface/60 border border-warning/30 flex items-center justify-between text-xs text-muted animate-in fade-in-50">
         <div className="flex items-center gap-2.5">
           <AlertCircle className="w-4 h-4 text-warning" />
-          <span className="text-text">This approval request expired after 90 seconds.</span>
+          <span className="text-text">This approval request has expired.</span>
         </div>
-        <button
-          onClick={handleRedraft}
-          className="px-2.5 py-1 rounded-control bg-elevated text-primary hover:text-white border border-border transition-colors font-medium"
-        >
-          Re-request
-        </button>
+        {apiClient.isMock ? (
+          <button
+            onClick={handleRedraft}
+            className="px-2.5 py-1 rounded-control bg-elevated text-primary hover:text-white border border-border transition-colors font-medium"
+          >
+            Re-request
+          </button>
+        ) : (
+          <button
+            onClick={() => handleApprovalDecision({
+              threadId,
+              messageId,
+              approvalId: approval.approval_id,
+              decision: 'reject',
+              action: approval.action,
+            })}
+            className="px-2.5 py-1 rounded-control bg-elevated text-primary hover:text-white border border-border transition-colors font-medium"
+          >
+            Dismiss
+          </button>
+        )}
       </div>
     );
   }
@@ -214,7 +256,7 @@ export function ApprovalCard({ approval, messageId, threadId }) {
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-xs font-semibold text-text uppercase tracking-wider">
-                Create Jira Ticket
+                {actionTitle}
               </h4>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 flex items-center gap-1 font-semibold">
                 <Shield className="w-2.5 h-2.5" />
@@ -222,7 +264,7 @@ export function ApprovalCard({ approval, messageId, threadId }) {
               </span>
             </div>
             <p className="text-[11px] text-faint mt-0.5">
-              Review parameters before writing to external issue tracker
+              Review the proposed write before it is sent to the connected service.
             </p>
           </div>
         </div>
@@ -234,148 +276,115 @@ export function ApprovalCard({ approval, messageId, threadId }) {
 
       {/* Form Body: Key-Value Layout */}
       <div className="py-3.5 space-y-3 text-xs">
-        {/* Project & Priority Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[11px] font-mono text-faint mb-1">
-              Project Key
-            </label>
-            <select
-              disabled={isExecuting}
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              className="w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text focus:outline-none focus:border-primary disabled:opacity-50"
-            >
-              <option value="PAY">PAY (Payments Engine)</option>
-              <option value="IT">IT (IT Service Desk)</option>
-              <option value="INFRA">INFRA (Cloud Platform)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-mono text-faint mb-1">
-              Priority
-            </label>
-            <select
-              disabled={isExecuting}
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text focus:outline-none focus:border-primary disabled:opacity-50"
-            >
-              <option value="Highest">Highest (Blocker)</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Summary Input with Character Count */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] font-mono text-faint">
-              Summary <span className="text-danger">*</span>
-            </label>
-            <span
-              className={`text-[10px] font-mono ${
-                summary.length > 100 ? 'text-warning' : 'text-faint'
-              }`}
-            >
-              {summary.length}/120
-            </span>
-          </div>
-          <input
-            type="text"
-            disabled={isExecuting}
-            maxLength={120}
-            value={summary}
-            onChange={(e) => {
-              setSummary(e.target.value);
-              if (validationError) setValidationError('');
-            }}
-            placeholder="Brief issue summary"
-            className={`w-full bg-elevated border rounded-control px-2.5 py-1.5 text-xs text-text focus:outline-none disabled:opacity-50 ${
-              validationError ? 'border-danger' : 'border-border focus:border-primary'
-            }`}
-          />
-          {validationError && (
-            <p className="text-[11px] text-danger mt-1">{validationError}</p>
-          )}
-        </div>
-
-        {/* Description Multiline with Markdown Preview Toggle */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] font-mono text-faint">Description</label>
-            <button
-              type="button"
-              onClick={() => setShowPreview(!showPreview)}
-              className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
-            >
-              {showPreview ? (
-                <>
-                  <Edit3 className="w-3 h-3" />
-                  <span>Edit Raw</span>
-                </>
-              ) : (
-                <>
-                  <Eye className="w-3 h-3" />
-                  <span>Preview Markdown</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {showPreview ? (
-            <div className="w-full bg-elevated/70 border border-border rounded-control p-2.5 text-xs text-muted max-h-36 overflow-y-auto whitespace-pre-wrap font-sans">
-              {description}
+        {isLeaveRequest ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-[11px] font-mono text-faint">
+                Start date
+                <input
+                  type="date"
+                  disabled={isExecuting}
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  className="mt-1 w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
+                />
+              </label>
+              <label className="text-[11px] font-mono text-faint">
+                End date
+                <input
+                  type="date"
+                  disabled={isExecuting}
+                  value={endDate}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  className="mt-1 w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
+                />
+              </label>
             </div>
-          ) : (
-            <textarea
-              disabled={isExecuting}
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detailed description, repro steps, references"
-              className="w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text focus:outline-none focus:border-primary disabled:opacity-50 resize-y max-h-48 font-mono"
-            />
-          )}
-        </div>
-
-        {/* Reporter (Locked Field with Tooltip) */}
-        <div>
-          <label className="block text-[11px] font-mono text-faint mb-1">
-            Reporter
-          </label>
-          <Tooltip.Provider>
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <div className="flex items-center justify-between bg-elevated/50 border border-border rounded-control px-2.5 py-1.5 text-xs text-muted cursor-not-allowed">
-                  <div className="flex items-center gap-2 truncate">
-                    <img
-                      src={currentUser.avatar}
-                      alt=""
-                      className="w-4 h-4 rounded-full object-cover"
-                    />
-                    <span className="text-text font-medium truncate">
-                      {currentUser.name} ({currentUser.email})
-                    </span>
-                  </div>
-                  <Lock className="w-3 h-3 text-faint flex-shrink-0" />
-                </div>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  side="top"
-                  sideOffset={4}
-                  className="z-50 bg-black/90 text-white text-[10px] px-2 py-1 rounded shadow-md border border-border"
+            <label className="block text-[11px] font-mono text-faint">
+              Reason
+              <textarea
+                disabled={isExecuting}
+                maxLength={500}
+                rows={3}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                className="mt-1 w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-[11px] font-mono text-faint">
+                Project Key
+                <input
+                  disabled={isExecuting}
+                  maxLength={10}
+                  value={project}
+                  onChange={(event) => setProject(event.target.value.toUpperCase())}
+                  className="mt-1 w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
+                />
+              </label>
+              <label className="text-[11px] font-mono text-faint">
+                Priority
+                <select
+                  disabled={isExecuting}
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value)}
+                  className="mt-1 w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
                 >
-                  Set automatically from your authenticated sign-in session
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        </div>
+                  <option value="Highest">Highest</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                  <option value="Lowest">Lowest</option>
+                </select>
+              </label>
+            </div>
+            <label className="block text-[11px] font-mono text-faint">
+              Summary
+              <input
+                disabled={isExecuting}
+                maxLength={120}
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                className="mt-1 w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
+              />
+            </label>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-mono text-faint">Description</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
+                >
+                  {showPreview ? (
+                    <><Edit3 className="w-3 h-3" /><span>Edit Raw</span></>
+                  ) : (
+                    <><Eye className="w-3 h-3" /><span>Preview</span></>
+                  )}
+                </button>
+              </div>
+              {showPreview ? (
+                <div className="w-full bg-elevated/70 border border-border rounded-control p-2.5 text-xs text-muted max-h-36 overflow-y-auto whitespace-pre-wrap">
+                  {description}
+                </div>
+              ) : (
+                <textarea
+                  disabled={isExecuting}
+                  rows={4}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className="w-full bg-elevated border border-border rounded-control px-2.5 py-1.5 text-xs text-text"
+                />
+              )}
+            </div>
+          </>
+        )}
+        {validationError && (
+          <p className="text-[11px] text-danger mt-1">{validationError}</p>
+        )}
 
         {/* "Based on" Sources Row */}
         {approval.based_on && approval.based_on.length > 0 && (
@@ -424,12 +433,12 @@ export function ApprovalCard({ approval, messageId, threadId }) {
             {isExecuting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Writing to Jira...</span>
+                <span>{isLeaveRequest ? 'Submitting request...' : 'Writing to Jira...'}</span>
               </>
             ) : (
               <>
                 <Check className="w-3.5 h-3.5" />
-                <span>Approve and create</span>
+                <span>{isLeaveRequest ? 'Approve and submit' : 'Approve and create'}</span>
               </>
             )}
           </button>
