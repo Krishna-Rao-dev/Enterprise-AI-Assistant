@@ -1,4 +1,4 @@
-# Enterprise Knowledge Assistant
+# Permission-Aware Enterprise Knowledge Assistant
 
 An enterprise-oriented assistant with a React frontend, FastAPI backend, and a
 LangGraph workflow that routes knowledge questions to permission-filtered RAG
